@@ -9,7 +9,7 @@
  * The three alerts are deliberately different instruments rather than the same
  * chime at three pitches:
  *
- * - `done` — warm additive partials, a rising perfect fifth that resolves.
+ * - `turnEnd` — warm additive partials, a rising perfect fifth that resolves.
  * - `attention` — inharmonic bell partials, a rising arpeggio that rings.
  * - `error` — detuned odd harmonics that beat against each other, a falling
  *   figure that sounds wrong on purpose.
@@ -32,7 +32,7 @@ window.__ModuleLoader__.load({
      * levels; an inharmonic set is what makes a bell sound like a bell.
      */
     const CHIMES = {
-      done: {
+      turnEnd: {
         notes: [
           { frequency: 164.81, start: 0, duration: 0.9, gain: 1 },
           { frequency: 246.94, start: 0.1, duration: 1.1, gain: 0.85 },
@@ -96,7 +96,13 @@ window.__ModuleLoader__.load({
      */
     function play(kind, volume) {
       const chime = CHIMES[kind]
-      if (chime === undefined) return
+      if (chime === undefined) {
+        // A kind the client does not know is a code mismatch, not a config
+        // error. Staying silent is how turn-end went missing while the other
+        // two alerts kept working, so say so instead.
+        console.warn(`sound-alerts: no chime defined for alert kind "${kind}"`)
+        return
+      }
       const context = audioContext()
       if (context === undefined) return
       unlock()

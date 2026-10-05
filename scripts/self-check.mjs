@@ -1,4 +1,5 @@
 import { strict as assert } from 'node:assert'
+import { readFileSync } from 'node:fs'
 import { Config, EVENTS_ENDPOINT, apply } from '../index.js'
 
 const validate = (input) => Config['~standard'].validate(input)
@@ -129,3 +130,16 @@ console.log('ok  disabled alerts stay silent and frames carry the configured vol
 effects[0]()
 assert.deepEqual(ended, [true], 'disposal must end open alert streams')
 console.log('ok  disposal ends open streams so browsers reconnect')
+
+// Regression: the browser selects its voice by alert kind, so every kind the
+// Host publishes must exist in the client's chime map. They drifted once — the
+// Host published `turnEnd` while the client only knew `done` — and the browser
+// dropped the alert with no sound and no error.
+const clientSource = readFileSync(new URL('../client.js', import.meta.url), 'utf8')
+for (const kind of ['turnEnd', 'attention', 'error']) {
+  assert.ok(
+    clientSource.includes(`${kind}: {`),
+    `client.js defines no chime voice for alert kind "${kind}"`,
+  )
+}
+console.log('ok  every published alert kind has a client chime voice')
