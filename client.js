@@ -27,15 +27,15 @@ window.__ModuleLoader__.load({
     const ENDPOINT = 'sound-alerts/events'
 
     /**
-     * Chime definitions, tuned in the 65-330 Hz band so they sit under speech
+     * Chime definitions, tuned in the 98-494 Hz band so they sit under speech
      * and music. `partials` are frequency multipliers and `amps` their relative
      * levels; an inharmonic set is what makes a bell sound like a bell.
      */
     const CHIMES = {
       turnEnd: {
         notes: [
-          { frequency: 164.81, start: 0, duration: 0.9, gain: 1 },
-          { frequency: 246.94, start: 0.1, duration: 1.1, gain: 0.85 },
+          { frequency: 246.94, start: 0, duration: 0.9, gain: 1 },
+          { frequency: 369.99, start: 0.1, duration: 1.1, gain: 0.85 },
         ],
         partials: [1, 2, 3],
         amps: [1, 0.28, 0.1],
@@ -44,9 +44,9 @@ window.__ModuleLoader__.load({
       },
       attention: {
         notes: [
-          { frequency: 220.0, start: 0, duration: 0.3, gain: 1 },
-          { frequency: 277.18, start: 0.13, duration: 0.3, gain: 1 },
-          { frequency: 329.63, start: 0.26, duration: 0.62, gain: 0.9 },
+          { frequency: 329.63, start: 0, duration: 0.3, gain: 1 },
+          { frequency: 415.30, start: 0.13, duration: 0.3, gain: 1 },
+          { frequency: 493.88, start: 0.26, duration: 0.62, gain: 0.9 },
         ],
         partials: [1, 2.76, 5.4],
         amps: [1, 0.5, 0.26],
@@ -55,9 +55,9 @@ window.__ModuleLoader__.load({
       },
       error: {
         notes: [
-          { frequency: 110.0, start: 0, duration: 0.4, gain: 1 },
-          { frequency: 87.31, start: 0.18, duration: 0.4, gain: 1 },
-          { frequency: 65.41, start: 0.36, duration: 0.85, gain: 0.95 },
+          { frequency: 164.81, start: 0, duration: 0.4, gain: 1 },
+          { frequency: 130.81, start: 0.18, duration: 0.4, gain: 1 },
+          { frequency: 98.00, start: 0.36, duration: 0.85, gain: 0.95 },
         ],
         partials: [1, 3, 5],
         amps: [1, 0.45, 0.28],

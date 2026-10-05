@@ -30,11 +30,11 @@ and no OS audio tool is involved.
 
 | Alert | Voice | Figure |
 | --- | --- | --- |
-| `done` | Warm additive partials | Rising perfect fifth, E3 → B3 |
-| `attention` | Inharmonic bell partials | Rising arpeggio, A3 → C#4 → E4 |
-| `error` | Detuned odd harmonics, beating | Falling figure, A2 → F2 → C2 |
+| `turnEnd` | Warm additive partials | Rising perfect fifth, B3 → F#4 |
+| `attention` | Inharmonic bell partials | Rising arpeggio, E4 → G#4 → B4 |
+| `error` | Detuned odd harmonics, beating | Falling figure, E3 → C3 → G2 |
 
-Even `done` and `attention` share no partial structure: `attention` uses the
+Even `turnEnd` and `attention` share no partial structure: `attention` uses the
 inharmonic ratios that make a bell ring, while `error` detunes two voices against
 each other so the sound beats and reads as wrong.
 
@@ -116,7 +116,7 @@ stays silent.
 - **Web UI only.** The plugin requires the Host's web server, so it stays
   inactive in a headless profile. There is no terminal alert.
 - **The bass notes need speakers that reproduce them.** `error` bottoms out at
-  65 Hz and `done` at 165 Hz. Laptop speakers roll off below roughly 150 Hz, so
+  98 Hz and `turnEnd` at 247 Hz. Laptop speakers roll off below roughly 150 Hz, so
   the lowest fundamentals are carried by their harmonics rather than reproduced
   directly; raise the pitches if the low alerts sound thin.
 - **A user-cancelled turn still chimes.** `agent/turn-stopping` fires when a turn
