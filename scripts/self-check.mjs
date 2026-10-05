@@ -26,9 +26,16 @@ console.log('ok  invalid configs rejected')
 
 // Disabling an alert is honoured at dispatch time.
 const listeners = new Map()
+const listenerOptions = new Map()
 const warnings = []
 apply(
-  { on: (name, fn) => listeners.set(name, fn), logger: { warn: (m) => warnings.push(m) } },
+  {
+    on: (name, fn, options) => {
+      listeners.set(name, fn)
+      listenerOptions.set(name, options)
+    },
+    logger: { warn: (m) => warnings.push(m) },
+  },
   { ...base.value, alerts: { turnEnd: false, attention: true, error: true } },
 )
 assert.deepEqual([...listeners.keys()], [
@@ -38,6 +45,19 @@ assert.deepEqual([...listeners.keys()], [
   'user-questions/request',
 ])
 console.log('ok  listeners registered')
+
+// Regression: the application's forwarded-event listener answers these two
+// requests on behalf of the UI and resolves WITHOUT calling next(), so an
+// observer registered behind it is never reached. Both must prepend.
+for (const event of ['approval/request', 'user-questions/request']) {
+  assert.equal(
+    listenerOptions.get(event)?.prepend,
+    true,
+    `${event} must register with prepend to observe the request`,
+  )
+}
+assert.equal(listenerOptions.get('agent/turn-stopping'), undefined)
+console.log('ok  attention listeners prepend ahead of the answering listener')
 
 // Root agents alert; subagent turns stay quiet under quietSubagents.
 listeners.get('agent/turn-stopping')({ agent: { session: { header: {} } } })

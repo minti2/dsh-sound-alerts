@@ -251,13 +251,20 @@ export function apply(ctx, config) {
 
   // Both are waterfall events: the alert observes the request for a human, it
   // does not answer or decide it, so it must delegate onward.
+  //
+  // `prepend: true` is required, not cosmetic. The application's own forwarded
+  // event listener answers these requests on behalf of the connected UI and
+  // resolves WITHOUT calling `next()`, so any listener registered behind it
+  // never runs at all. An observer that only plays a sound has to sit ahead of
+  // the answerer to see the request. This cannot observe or alter an approval
+  // the service already decided: the 'never' policy returns before dispatch.
   ctx.on('approval/request', (_request, next) => {
     notify('attention')
     return next()
-  })
+  }, { prepend: true })
 
   ctx.on('user-questions/request', (_request, next) => {
     notify('attention')
     return next()
-  })
+  }, { prepend: true })
 }

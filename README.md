@@ -102,6 +102,20 @@ Checks that defaults resolve, that misconfiguration is rejected at load, that
 the four listeners register, and that the two waterfall listeners delegate
 onward with `next()` instead of swallowing the approval or question.
 
+## Why the attention listeners prepend
+
+`approval/request` and `user-questions/request` are waterfall events. The
+Harness application registers its own listener for both, which forwards the
+request to the connected UI and returns the user's answer; when the UI answers,
+that listener resolves **without calling `next()`**, so the rest of the chain is
+skipped. A plugin listener registered after it is never invoked at all.
+
+Both attention listeners therefore register with `prepend: true` so the chime
+fires before the answering listener runs. This observation cannot change a
+decision: the `never` approval policy is settled inside the approval service
+before the event is dispatched, so a policy-blocked request never reaches any
+listener.
+
 ## Known limitations
 
 - **The sound plays where the Host process runs.** Driving a remote Harness over
@@ -111,3 +125,7 @@ onward with `next()` instead of swallowing the approval or question.
 - **Unix only out of the box** for `afplay`/`paplay`; on Windows the default
   PowerShell player blocks its own process, which is harmless because it is
   detached.
+- **The prepend depends on the application's forwarded-event listener not
+  prepending itself.** Both still run if it does, but a future change that
+  prepends it ahead of this plugin would silence the attention chime while
+  leaving turn-end and error alerts working.
