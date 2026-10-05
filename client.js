@@ -22,9 +22,46 @@
 
 window.__ModuleLoader__.load({
   id: 'dsh-sound-alerts',
-  factory() {
+  factory(require) {
+    const React = require('react')
+    const h = React.createElement
+
     /** Document-relative form of the Host's alert route. */
     const ENDPOINT = 'sound-alerts/events'
+
+    /** Settings namespace: the id of the row this bundle's patch declares. */
+    const NS = 'sound-alerts'
+
+    /** This row's key in the Plugins page: `<package name>#<row id>`. */
+    const ROW_KEY = 'dsh-sound-alerts#sound-alerts'
+
+    /** Form copy, registered under {@link NS} and read through the `t` seat. */
+    const DICTIONARIES = {
+      en: {
+        turnEnd: 'Turn finished',
+        turnEndHint: 'Play when a turn closes and the model owes no further response.',
+        attention: 'Needs your attention',
+        attentionHint: 'Play when the harness is blocked on your approval or your answer.',
+        error: 'Turn failed',
+        errorHint: 'Play when a step or turn errors.',
+        quietSubagents: 'Quiet subagents',
+        quietSubagentsHint: 'Silence turn-end and error chimes from subagent sessions. Attention alerts always play.',
+        volume: 'Volume',
+        volumeHint: 'Peak gain of every chime, 0 to 1.',
+      },
+      zh: {
+        turnEnd: '回合结束',
+        turnEndHint: '回合关闭且模型无需继续回应时播放。',
+        attention: '需要你处理',
+        attentionHint: 'Harness 等待你批准或回答时播放。',
+        error: '回合失败',
+        errorHint: '步骤或回合出错时播放。',
+        quietSubagents: '静默子代理',
+        quietSubagentsHint: '子代理会话的回合结束与失败不播放；需要处理的提醒始终播放。',
+        volume: '音量',
+        volumeHint: '每个提示音的峰值增益，0 到 1。',
+      },
+    }
 
     /**
      * Chime definitions, tuned in the 98-494 Hz band so they sit under speech
@@ -141,9 +178,125 @@ window.__ModuleLoader__.load({
       }
     }
 
+    /** One labelled row of the settings form. */
+    function FormRow(props) {
+      return h('div', {
+        style: {
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          gap: 16, padding: '10px 0', borderTop: '1px solid var(--dsw-alias-border-l1)',
+        },
+      },
+        h('div', { style: { minWidth: 0 } },
+          h('div', { style: { color: 'var(--dsw-alias-label-primary)', fontSize: 13 } }, props.label),
+          h('div', { style: { color: 'var(--dsw-alias-label-secondary)', fontSize: 12, marginTop: 2 } }, props.hint),
+        ),
+        props.children,
+      )
+    }
+
+    /** A switch matching the host control's `role="switch"` contract. */
+    function Switch(props) {
+      return h('button', {
+        type: 'button',
+        role: 'switch',
+        'aria-checked': props.checked,
+        'aria-label': props.label,
+        disabled: props.disabled,
+        onClick: () => { props.onChange(!props.checked) },
+        style: {
+          flex: '0 0 auto', width: 38, height: 22, borderRadius: 11, padding: 0, position: 'relative',
+          border: '1px solid var(--dsw-alias-border-l2)',
+          background: props.checked ? 'var(--dsw-alias-brand-primary)' : 'var(--dsw-alias-bg-layer-2)',
+          cursor: props.disabled ? 'default' : 'pointer',
+          opacity: props.disabled ? 0.5 : 1,
+        },
+      }, h('span', {
+        'aria-hidden': true,
+        style: {
+          position: 'absolute', top: 3, left: props.checked ? 19 : 3, width: 14, height: 14,
+          borderRadius: 7, background: 'var(--dsw-alias-bg-layer-1)', transition: 'left 120ms ease',
+        },
+      }))
+    }
+
+    /**
+     * The volume control, committing once per gesture. Writing on every drag
+     * step would send a Host write per pixel for no extra information.
+     */
+    function VolumeSlider(props) {
+      const [draft, setDraft] = React.useState(props.value)
+      React.useEffect(() => { setDraft(props.value) }, [props.value])
+      const commit = () => { if (draft !== props.value) props.onCommit(draft) }
+      return h('div', { style: { display: 'flex', alignItems: 'center', gap: 10 } },
+        h('input', {
+          type: 'range', min: 0, max: 1, step: 0.05,
+          value: draft, disabled: props.disabled, 'aria-label': props.label,
+          onChange: (event) => { setDraft(Number(event.target.value)) },
+          onPointerUp: commit,
+          onKeyUp: commit,
+          onBlur: commit,
+          style: { width: 160, accentColor: 'var(--dsw-alias-brand-primary)' },
+        }),
+        h('span', { style: { color: 'var(--dsw-alias-label-secondary)', fontSize: 12, width: 36 } }, draft.toFixed(2)),
+      )
+    }
+
+    /**
+     * This row's configuration, as the Plugins page asks for it. The page owns
+     * the resolved values and the write actions; the component only renders
+     * them and forwards edits.
+     *
+     * @param props - the requested view, the `t` seat, and the entry's form.
+     * @returns The form for `view: 'page'`, otherwise nothing, which leaves the
+     * page's own one-liner in place.
+     */
+    function SettingsCard(props) {
+      const { view, form, t } = props
+      if (view !== 'page' || form === undefined) return null
+      const state = form.state
+      const value = state.value ?? {}
+      const alerts = value.alerts ?? {}
+      const disabled = state.writable !== true
+      const write = (path, next) => { void form.mutate([{ op: 'set', path, value: next }]) }
+      const toggle = (kind, key, hintKey) => h(FormRow, { key: kind, label: t(key), hint: t(hintKey) },
+        h(Switch, {
+          checked: alerts[kind] === true, label: t(key), disabled,
+          onChange: (next) => { write(['alerts', kind], next) },
+        }))
+      return h('div', { style: { paddingBottom: 4 } },
+        toggle('turnEnd', 'turnEnd', 'turnEndHint'),
+        toggle('attention', 'attention', 'attentionHint'),
+        toggle('error', 'error', 'errorHint'),
+        h(FormRow, { key: 'quiet', label: t('quietSubagents'), hint: t('quietSubagentsHint') },
+          h(Switch, {
+            checked: value.quietSubagents === true, label: t('quietSubagents'), disabled,
+            onChange: (next) => { write(['quietSubagents'], next) },
+          })),
+        h(FormRow, { key: 'volume', label: t('volume'), hint: t('volumeHint') },
+          h(VolumeSlider, {
+            value: typeof value.volume === 'number' ? value.volume : DEFAULT_VOLUME,
+            label: t('volume'), disabled,
+            onCommit: (next) => { write(['volume'], next) },
+          })),
+      )
+    }
+
     return {
-      /** Open the alert stream and own it for the lifetime of this plugin. */
+      inject: ['slots', 'locale', 'configForms'],
+
+      /** Open the alert stream, and contribute this row's settings form. */
       apply(ctx) {
+        ctx.effect(() => ctx.locale.register(NS, DICTIONARIES), 'dsh-sound-alerts: dictionaries')
+
+        // The Plugins page asks a row for its configuration once the Host
+        // serves the namespace; without this contribution the schema is
+        // validated and persisted but has no control anywhere.
+        ctx.effect(() => ctx.configForms.whileServed([NS], () => ctx.slots.inject('plugins.row.config', () => ctx.slots.register({
+          name: 'plugins.row.config',
+          key: ROW_KEY,
+          locale: NS,
+        }, SettingsCard))), 'dsh-sound-alerts: settings form')
+
         ctx.effect(() => {
           window.addEventListener('pointerdown', unlock)
           window.addEventListener('keydown', unlock)

@@ -62,10 +62,16 @@ each other so the sound beats and reads as wrong.
 
 ## Configuration
 
-`Config` is a Schemastery schema, so every field below appears as an editable
-control under the plugin's settings page — a switch per alert, a switch for
-subagent quiet, and a slider for volume. Edits persist through the same profile
-patch layer a hand edit would use.
+`Config` is a Schemastery schema, and the browser half contributes the matching
+form, so every field below is editable without touching a file: **Settings →
+Plugins → `dsh-sound-alerts` → the `sound-alerts` row's configure control**. It
+gives a switch per alert, a switch for subagent quiet, and a slider for volume.
+Edits persist through the same profile patch layer a hand edit would use.
+
+The controls need both halves. The schema is what the Host validates against and
+projects into a form; the row's `plugins.row.config` contribution is what draws
+it. A plugin with a schema but no contribution reports `status: "schema"` and
+still shows no controls anywhere.
 
 The same fields can be set directly in a profile's `cordis.patch.yml`:
 
