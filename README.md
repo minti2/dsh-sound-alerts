@@ -30,9 +30,9 @@ node scripts/generate-sounds.mjs
 
 | File | Sound |
 | --- | --- |
-| `sounds/done.wav` | Rising perfect fifth (E5 → B5). An affirmative "finished". |
-| `sounds/attention.wav` | Rising A-major arpeggio (A5 → C#6 → E6). Three quick pings that read as "waiting on you". |
-| `sounds/error.wav` | Falling A-minor triad (A4 → F4 → C4). Low and subdued rather than alarming. |
+| `sounds/done.wav` | Rising perfect fifth (E4 → B4). An affirmative "finished". |
+| `sounds/attention.wav` | Rising A-major arpeggio (A4 → C#5 → E5). Three quick pings that read as "waiting on you". |
+| `sounds/error.wav` | Falling A-minor triad (A3 → F3 → C3). Low and subdued rather than alarming. |
 
 ## Install
 
@@ -85,7 +85,7 @@ Notes:
 
 | Platform | Command | Notes |
 | --- | --- | --- |
-| macOS | `/usr/bin/afplay {file}` | Set `args: ['-v', '0.4', '{file}']` to lower the volume. |
+| macOS | `/usr/bin/afplay {file}` | The chimes render at about -3 dB peak; `args: ['-v', '0.5', '{file}']` lowers them further. |
 | Linux | `paplay {file}` | Needs PulseAudio; use `aplay -q {file}` for bare ALSA. |
 | Windows | `powershell -NoProfile -NonInteractive -Command "(New-Object Media.SoundPlayer '{file}').PlaySync()"` | |
 

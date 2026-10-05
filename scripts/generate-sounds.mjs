@@ -145,27 +145,29 @@ function chime(voice, notes, tail) {
     notes.map((note) => ({ ...timbre, ...note })),
     last + tail,
   )
-  return normalize(track, 0.89)
+  return normalize(track, 0.62)
 }
 
 const CHIMES = {
-  // Rising perfect fifth (E5 -> B5): an affirmative "finished".
+  // Rising perfect fifth (E4 -> B4): an affirmative "finished", an octave below
+  // the original so it sits under speech and music instead of over them.
   done: chime('done', [
-    { frequency: 659.25, start: 0, duration: 0.9, gain: 1 },
-    { frequency: 987.77, start: 0.1, duration: 1.1, gain: 0.85 },
+    { frequency: 329.63, start: 0, duration: 0.9, gain: 1 },
+    { frequency: 493.88, start: 0.1, duration: 1.1, gain: 0.85 },
   ], 0.05),
-  // Rising A-major arpeggio (A5 -> C#6 -> E6): three quick pings that read as
+  // Rising A-major arpeggio (A4 -> C#5 -> E5): three quick pings that read as
   // "the harness is waiting on you" without the harshness of a buzzer.
   attention: chime('attention', [
-    { frequency: 880.0, start: 0, duration: 0.3, gain: 1 },
-    { frequency: 1108.73, start: 0.13, duration: 0.3, gain: 1 },
-    { frequency: 1318.51, start: 0.26, duration: 0.62, gain: 0.9 },
+    { frequency: 440.0, start: 0, duration: 0.3, gain: 1 },
+    { frequency: 554.37, start: 0.13, duration: 0.3, gain: 1 },
+    { frequency: 659.25, start: 0.26, duration: 0.62, gain: 0.9 },
   ], 0.05),
-  // Falling A-minor triad (A4 -> F4 -> C4): a low, subdued "that did not work".
+  // Falling A-minor triad (A3 -> F3 -> C3): a low, subdued "that did not work".
+  // Its second partial keeps the fundamental readable on laptop speakers.
   error: chime('error', [
-    { frequency: 440.0, start: 0, duration: 0.35, gain: 1 },
-    { frequency: 349.23, start: 0.16, duration: 0.35, gain: 1 },
-    { frequency: 261.63, start: 0.32, duration: 0.8, gain: 0.95 },
+    { frequency: 220.0, start: 0, duration: 0.35, gain: 1 },
+    { frequency: 174.61, start: 0.16, duration: 0.35, gain: 1 },
+    { frequency: 130.81, start: 0.32, duration: 0.8, gain: 0.95 },
   ], 0.05),
 }
 
