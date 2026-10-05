@@ -20,8 +20,11 @@
  * plays.
  */
 
+/** Loader id: the package name, which the Plugins page also keys this row's form by. */
+const PACKAGE = 'dsh-sound-alerts'
+
 window.__ModuleLoader__.load({
-  id: 'dsh-sound-alerts',
+  id: PACKAGE,
   factory(require) {
     const React = require('react')
     const h = React.createElement
@@ -33,7 +36,7 @@ window.__ModuleLoader__.load({
     const NS = 'sound-alerts'
 
     /** This row's key in the Plugins page: `<package name>#<row id>`. */
-    const ROW_KEY = 'dsh-sound-alerts#sound-alerts'
+    const ROW_KEY = `${PACKAGE}#${NS}`
 
     /** Form copy, registered under {@link NS} and read through the `t` seat. */
     const DICTIONARIES = {
@@ -257,7 +260,14 @@ window.__ModuleLoader__.load({
       const value = state.value ?? {}
       const alerts = value.alerts ?? {}
       const disabled = state.writable !== true
-      const write = (path, next) => { void form.mutate([{ op: 'set', path, value: next }]) }
+      // A refused write resolves false; only a transport failure rejects, and an
+      // unhandled rejection would report it to the page instead of the control
+      // that failed.
+      const write = (path, next) => {
+        form.mutate([{ op: 'set', path, value: next }]).catch((error) => {
+          console.warn('sound-alerts: settings write failed', error)
+        })
+      }
       const toggle = (kind, key, hintKey) => h(FormRow, { key: kind, label: t(key), hint: t(hintKey) },
         h(Switch, {
           checked: alerts[kind] === true, label: t(key), disabled,
@@ -282,21 +292,11 @@ window.__ModuleLoader__.load({
     }
 
     return {
-      inject: ['slots', 'locale', 'configForms'],
-
       /** Open the alert stream, and contribute this row's settings form. */
       apply(ctx) {
-        ctx.effect(() => ctx.locale.register(NS, DICTIONARIES), 'dsh-sound-alerts: dictionaries')
-
-        // The Plugins page asks a row for its configuration once the Host
-        // serves the namespace; without this contribution the schema is
-        // validated and persisted but has no control anywhere.
-        ctx.effect(() => ctx.configForms.whileServed([NS], () => ctx.slots.inject('plugins.row.config', () => ctx.slots.register({
-          name: 'plugins.row.config',
-          key: ROW_KEY,
-          locale: NS,
-        }, SettingsCard))), 'dsh-sound-alerts: settings form')
-
+        // Playback is the product, so it registers unconditionally rather than
+        // waiting on the settings services through the plugin's own `inject`: a
+        // profile without them keeps its chimes and loses only the form.
         ctx.effect(() => {
           window.addEventListener('pointerdown', unlock)
           window.addEventListener('keydown', unlock)
@@ -321,6 +321,19 @@ window.__ModuleLoader__.load({
             window.removeEventListener('keydown', unlock)
             source.close()
           }
+        })
+
+        // The Plugins page asks a row for its configuration once the Host
+        // serves the namespace. Without this contribution the schema validates
+        // and persists but has no control anywhere, so the entry stays
+        // `status: "schema"` with nothing to change it.
+        ctx.inject(['slots', 'locale', 'configForms'], (settings) => {
+          settings.effect(() => settings.locale.register(NS, DICTIONARIES), 'dsh-sound-alerts: dictionaries')
+          settings.effect(() => settings.configForms.whileServed([NS], () => settings.slots.inject('plugins.row.config', () => settings.slots.register({
+            name: 'plugins.row.config',
+            key: ROW_KEY,
+            locale: NS,
+          }, SettingsCard))), 'dsh-sound-alerts: settings form')
         })
       },
     }

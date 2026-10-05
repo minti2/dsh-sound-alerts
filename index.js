@@ -75,15 +75,35 @@ export const Config = Schema.object({
 export function apply(ctx, config) {
   const connections = new Set()
 
-  // Volatile fields resolve to accessors rather than plain values, so each
-  // alert reads them here instead of destructuring once at activation. That is
-  // what makes a settings edit audible on the next alert rather than at the
-  // next restart.
-  /** Write one alert frame to every open browser stream. */
+  /** Stop publishing to one browser stream. */
+  const drop = (response) => { connections.delete(response) }
+
+  /**
+   * Write one alert frame to every open browser stream.
+   *
+   * Each write is contained and a failed stream is dropped rather than
+   * rethrown. `agent/turn-stopping` is a Cordis `serial` dispatch, which
+   * propagates a listener throw instead of containing it, and the loop awaits
+   * it inside the turn's own try — where the rejection marks a successful turn
+   * failed and raises the error alert this plugin exists to report, not to
+   * cause. A stream can die between its `close` event and this write.
+   *
+   * Volatile fields resolve to accessors rather than plain values, so each
+   * alert reads them here instead of destructuring once at activation. That is
+   * what makes a settings edit audible on the next alert rather than at the
+   * next restart.
+   */
   const publish = (kind) => {
     if (!config.alerts[kind].get() || connections.size === 0) return
     const frame = `data: ${JSON.stringify({ kind, volume: config.volume.get() })}\n\n`
-    for (const response of connections) response.write(frame)
+    for (const response of connections) {
+      try {
+        response.write(frame)
+      } catch (error) {
+        drop(response)
+        ctx.logger.warn(`sound-alerts: dropped a failed alert stream: ${String(error)}`)
+      }
+    }
   }
 
   ctx.effect(
@@ -105,16 +125,36 @@ export function apply(ctx, config) {
             'connection': 'keep-alive',
           })
           // A comment frame makes the channel observably live before any alert.
-          response.write(': connected\n\n')
+          // It is contained like every other write: a request whose socket died
+          // before this point must not throw out of the route handler.
+          try {
+            response.write(': connected\n\n')
+          } catch (error) {
+            ctx.logger.warn(`sound-alerts: alert stream failed to open: ${String(error)}`)
+            return
+          }
           connections.add(response)
-          response.on('close', () => { connections.delete(response) })
+          response.on('close', () => { drop(response) })
+          // A socket that dies mid-stream raises 'error'; with no listener that
+          // is an unhandled 'error' event, which takes down the Host process.
+          response.on('error', (error) => {
+            drop(response)
+            ctx.logger.warn(`sound-alerts: alert stream failed: ${String(error)}`)
+          })
         },
       })
       // Ending the open streams here is what lets a browser reconnect. An
       // orphaned response stays open, so EventSource never notices the route is
       // gone and silently stops receiving alerts until the page is reloaded.
       return () => {
-        for (const response of connections) response.end()
+        for (const response of connections) {
+          try {
+            response.end()
+          } catch (error) {
+            // The socket is already gone; there is nothing left to close.
+            ctx.logger.warn(`sound-alerts: closing an alert stream failed: ${String(error)}`)
+          }
+        }
         connections.clear()
         disposeRoute()
       }
@@ -122,11 +162,23 @@ export function apply(ctx, config) {
     'sound-alerts: browser alert stream',
   )
 
-  // A subagent session is background work owned by another turn: alerting for
-  // each of them drowns out the alert that matters.
+  /**
+   * Report one agent alert, contained end to end. A subagent session is
+   * background work owned by another turn: alerting for each of them drowns
+   * out the alert that matters.
+   *
+   * The containment is not decorative. `agent/error` is emitted through the
+   * agent's own dispatcher, which contains listener throws, but
+   * `agent/turn-stopping` is dispatched with Cordis `serial`, which does not:
+   * its rejection lands in the turn's catch and marks the turn failed.
+   */
   const notifyAgent = (kind, agent) => {
-    if (config.quietSubagents.get() && agent?.session?.header?.origin === 'subagent') return
-    publish(kind)
+    try {
+      if (config.quietSubagents.get() && agent?.session?.header?.origin === 'subagent') return
+      publish(kind)
+    } catch (error) {
+      ctx.logger.warn(`sound-alerts: ${kind} alert failed: ${String(error)}`)
+    }
   }
 
   ctx.on('agent/turn-stopping', ({ agent }) => {

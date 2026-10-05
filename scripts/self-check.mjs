@@ -48,6 +48,7 @@ console.log('ok  every editable field is volatile, so describe() serves the name
 const listeners = new Map()
 const listenerOptions = new Map()
 const effects = []
+const warnings = []
 let route
 const ctx = {
   effect: (fn) => {
@@ -59,6 +60,7 @@ const ctx = {
     listenerOptions.set(name, options)
   },
   webServer: { register: (registered) => { route = registered; return () => {} } },
+  logger: { warn: (line) => warnings.push(line) },
 }
 apply(ctx, base)
 
@@ -129,6 +131,49 @@ for (const event of ['approval/request', 'user-questions/request']) {
 assert.deepEqual(alerts(), ['turnEnd', 'attention', 'attention'])
 console.log('ok  waterfall listeners delegate via next() and still alert')
 
+// Regression: a stream that dies mid-write must not reject the dispatch.
+// `agent/turn-stopping` is a cordis `serial`, which propagates a listener throw
+// instead of containing it, and the loop awaits it inside the turn's own try —
+// so a throw here would mark a successful turn failed and raise exactly the
+// error alert this plugin exists to report, not cause. This runs against the
+// first instance, before the block below rebinds `listeners` to a second one.
+const boomEnded = []
+let boomWrites = 0
+assert.doesNotThrow(() => {
+  route.handler({ method: 'GET' }, {
+    writeHead: () => {},
+    // The handshake succeeds and the alert write is the one that fails, which
+    // is the ordering a socket destroyed mid-stream actually produces.
+    write: () => {
+      boomWrites += 1
+      if (boomWrites > 1) throw new Error('socket destroyed')
+      return true
+    },
+    on: () => {},
+    end: () => { boomEnded.push(true) },
+  })
+  listeners.get('agent/turn-stopping')({ agent: { session: { header: {} } } })
+}, 'a failing stream must not propagate out of the turn-stopping listener')
+assert.ok(
+  warnings.some((line) => line.includes('dropped a failed alert stream')),
+  'a failed stream must be dropped and reported',
+)
+
+// A socket that dies before the channel opens is contained at the route too.
+assert.doesNotThrow(() => {
+  route.handler({ method: 'GET' }, {
+    writeHead: () => {},
+    write: () => { throw new Error('gone before open') },
+    on: () => {},
+    end: () => {},
+  })
+}, 'a stream that dies before opening must not throw out of the route handler')
+assert.ok(
+  warnings.some((line) => line.includes('failed to open')),
+  'a stream that never opened must be reported',
+)
+console.log('ok  a failing stream is dropped instead of failing the turn')
+
 // The frame carries the configured volume so tuning stays in the config.
 const tuned = Config({ volume: 0.05, alerts: { error: false } })
 const tunedFrames = []
@@ -138,6 +183,7 @@ apply(
     effect: (fn) => { fn(); return () => {} },
     on: (name, fn) => listeners.set(name, fn),
     webServer: { register: (registered) => { tunedRoute = registered; return () => {} } },
+    logger: { warn: (line) => warnings.push(line) },
   },
   tuned,
 )
@@ -152,6 +198,9 @@ console.log('ok  disabled alerts stay silent and frames carry the configured vol
 // reconnected and every open tab went silent until the page was reloaded.
 effects[0]()
 assert.deepEqual(ended, [true], 'disposal must end open alert streams')
+// A stream dropped by a failed write is already gone, so disposal must not
+// touch it again; only the streams still open are closed.
+assert.deepEqual(boomEnded, [], 'a dropped stream must not be closed again on disposal')
 console.log('ok  disposal ends open streams so browsers reconnect')
 
 // Regression: the browser selects its voice by alert kind, so every kind the
