@@ -95,6 +95,9 @@ Notes:
   always play: a blocked request needs a human no matter which agent raised it.
 - **Unknown keys and wrong types are rejected at load** with a message naming the
   problem, so a typo never silently disables an alert.
+- **A live config change reconnects your tab.** Applying new config disposes and
+  re-registers the alert route; the disposer ends the open streams, so the
+  browser reopens them instead of holding a dead one.
 
 ## Verify
 

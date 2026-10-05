@@ -23,10 +23,11 @@ console.log('ok  invalid configs rejected')
 // Wire the plugin to a test context and capture its route and listeners.
 const listeners = new Map()
 const listenerOptions = new Map()
+const effects = []
 let route
 const ctx = {
   effect: (fn) => {
-    fn()
+    effects.push(fn())
     return () => {}
   },
   on: (name, fn, options) => {
@@ -63,11 +64,12 @@ console.log('ok  attention listeners prepend ahead of the answering listener')
 // Open one browser stream and record the frames the Host publishes to it.
 const frames = []
 const headers = []
+const ended = []
 const response = {
   writeHead: (status, sent) => { headers.push([status, sent]) },
   write: (chunk) => { frames.push(chunk); return true },
   on: () => {},
-  end: () => {},
+  end: () => { ended.push(true) },
 }
 route.handler({ method: 'GET' }, response)
 assert.equal(headers[0][0], 200)
@@ -120,3 +122,10 @@ listeners.get('agent/error')({ agent: { session: { header: {} } } })
 listeners.get('agent/turn-stopping')({ agent: { session: { header: {} } } })
 assert.deepEqual(tunedFrames.slice(1).map(parse), [{ kind: 'turnEnd', volume: 0.05 }])
 console.log('ok  disabled alerts stay silent and frames carry the configured volume')
+
+// Disposal must end open streams. Regression: a live config reload used to
+// orphan the browser's stream, and it stayed open, so EventSource never
+// reconnected and every open tab went silent until the page was reloaded.
+effects[0]()
+assert.deepEqual(ended, [true], 'disposal must end open alert streams')
+console.log('ok  disposal ends open streams so browsers reconnect')

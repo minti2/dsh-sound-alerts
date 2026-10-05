@@ -126,28 +126,38 @@ export function apply(ctx, config) {
   }
 
   ctx.effect(
-    () => ctx.webServer.register({
-      kind: 'exact',
-      path: EVENTS_ENDPOINT,
-      handler: (request, response) => {
-        // Named routes match ahead of the carrier's method gate, so non-GET
-        // requests are rejected here rather than upstream.
-        if (request.method !== 'GET') {
-          response.writeHead(405)
-          response.end()
-          return
-        }
-        response.writeHead(200, {
-          'content-type': 'text/event-stream',
-          'cache-control': 'no-cache',
-          'connection': 'keep-alive',
-        })
-        // A comment frame makes the channel observably live before any alert.
-        response.write(': connected\n\n')
-        connections.add(response)
-        response.on('close', () => { connections.delete(response) })
-      },
-    }),
+    () => {
+      const disposeRoute = ctx.webServer.register({
+        kind: 'exact',
+        path: EVENTS_ENDPOINT,
+        handler: (request, response) => {
+          // Named routes match ahead of the carrier's method gate, so non-GET
+          // requests are rejected here rather than upstream.
+          if (request.method !== 'GET') {
+            response.writeHead(405)
+            response.end()
+            return
+          }
+          response.writeHead(200, {
+            'content-type': 'text/event-stream',
+            'cache-control': 'no-cache',
+            'connection': 'keep-alive',
+          })
+          // A comment frame makes the channel observably live before any alert.
+          response.write(': connected\n\n')
+          connections.add(response)
+          response.on('close', () => { connections.delete(response) })
+        },
+      })
+      // Ending the open streams here is what lets a browser reconnect. An
+      // orphaned response stays open, so EventSource never notices the route is
+      // gone and silently stops receiving alerts until the page is reloaded.
+      return () => {
+        for (const response of connections) response.end()
+        connections.clear()
+        disposeRoute()
+      }
+    },
     'sound-alerts: browser alert stream',
   )
 
