@@ -42,21 +42,26 @@ export const EVENTS_ENDPOINT = '/sound-alerts/events'
  * row at activation AND projects to JSON Schema, which is what lets the
  * settings service generate an editable form for this entry. A schema that only
  * validates reports `unsupported` and gets no controls.
+ *
+ * Every field is `.volatile()` because that is the settings surface. The
+ * settings service projects only volatile fields, and `describe()` drops an
+ * entry whose volatile projection is empty — so an ordinary schema yields no
+ * namespace at all, and a browser form waiting on that namespace never mounts.
  */
 export const Config = Schema.object({
   alerts: Schema.object({
-    turnEnd: Schema.boolean().default(true)
+    turnEnd: Schema.boolean().default(true).volatile()
       .description('Chime when a turn finishes.'),
-    attention: Schema.boolean().default(true)
+    attention: Schema.boolean().default(true).volatile()
       .description('Chime when the harness is blocked waiting on your approval or your answer.'),
-    error: Schema.boolean().default(true)
+    error: Schema.boolean().default(true).volatile()
       .description('Chime when a step or turn fails.'),
   }).default({}).description('Which events produce a sound.'),
 
-  quietSubagents: Schema.boolean().default(true)
+  quietSubagents: Schema.boolean().default(true).volatile()
     .description('Silence turn-end and error chimes raised by subagent sessions. Attention alerts always play.'),
 
-  volume: Schema.number().min(0).max(1).step(0.05).default(0.25)
+  volume: Schema.number().min(0).max(1).step(0.05).default(0.25).volatile()
     .description('Peak gain of every chime, from 0 to 1.'),
 })
 
@@ -68,13 +73,16 @@ export const Config = Schema.object({
  * @param config - The resolved config from {@link Config}.
  */
 export function apply(ctx, config) {
-  const { alerts, quietSubagents, volume } = config
   const connections = new Set()
 
+  // Volatile fields resolve to accessors rather than plain values, so each
+  // alert reads them here instead of destructuring once at activation. That is
+  // what makes a settings edit audible on the next alert rather than at the
+  // next restart.
   /** Write one alert frame to every open browser stream. */
   const publish = (kind) => {
-    if (!alerts[kind] || connections.size === 0) return
-    const frame = `data: ${JSON.stringify({ kind, volume })}\n\n`
+    if (!config.alerts[kind].get() || connections.size === 0) return
+    const frame = `data: ${JSON.stringify({ kind, volume: config.volume.get() })}\n\n`
     for (const response of connections) response.write(frame)
   }
 
@@ -117,7 +125,7 @@ export function apply(ctx, config) {
   // A subagent session is background work owned by another turn: alerting for
   // each of them drowns out the alert that matters.
   const notifyAgent = (kind, agent) => {
-    if (quietSubagents && agent?.session?.header?.origin === 'subagent') return
+    if (config.quietSubagents.get() && agent?.session?.header?.origin === 'subagent') return
     publish(kind)
   }
 

@@ -3,12 +3,15 @@ import { readFileSync } from 'node:fs'
 import { Config, EVENTS_ENDPOINT, apply } from '../index.js'
 
 // The schema supplies every default, including for omitted nested fields.
+// Volatile fields resolve to accessors, so values are read through `.get()`.
 const base = Config({})
-assert.deepEqual(base.alerts, { turnEnd: true, attention: true, error: true })
-assert.equal(base.quietSubagents, true)
-assert.equal(base.volume, 0.25)
-assert.equal(Config({ volume: 0.5 }).volume, 0.5)
-assert.equal(Config({ alerts: { turnEnd: false } }).alerts.attention, true)
+assert.equal(base.alerts.turnEnd.get(), true)
+assert.equal(base.alerts.attention.get(), true)
+assert.equal(base.alerts.error.get(), true)
+assert.equal(base.quietSubagents.get(), true)
+assert.equal(base.volume.get(), 0.25)
+assert.equal(Config({ volume: 0.5 }).volume.get(), 0.5)
+assert.equal(Config({ alerts: { turnEnd: false } }).alerts.attention.get(), true)
 console.log('ok  defaults resolve')
 
 // Out-of-range and mistyped values fail at activation, not at the first alert.
@@ -24,6 +27,22 @@ assert.equal(Reflect.get(Config, Symbol.for('schemastery')), true)
 assert.equal(typeof Config.type, 'string')
 assert.equal(typeof Config.meta, 'object')
 console.log('ok  config is a native schemastery graph, so settings renders controls')
+
+// Regression: the settings service serves ONLY volatile fields. `describe()`
+// drops an entry whose volatile projection is empty, so a non-volatile field
+// validates and persists yet never reaches the UI, and a browser form waiting
+// on that namespace silently never mounts.
+const editable = {
+  'alerts.turnEnd': Config.dict.alerts.dict.turnEnd,
+  'alerts.attention': Config.dict.alerts.dict.attention,
+  'alerts.error': Config.dict.alerts.dict.error,
+  quietSubagents: Config.dict.quietSubagents,
+  volume: Config.dict.volume,
+}
+for (const [path, field] of Object.entries(editable)) {
+  assert.equal(field.meta.volatile, true, `${path} must be volatile or the settings form omits it`)
+}
+console.log('ok  every editable field is volatile, so describe() serves the namespace')
 
 // Wire the plugin to a test context and capture its route and listeners.
 const listeners = new Map()

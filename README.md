@@ -68,10 +68,17 @@ Plugins → `dsh-sound-alerts` → the `sound-alerts` row's configure control**.
 gives a switch per alert, a switch for subagent quiet, and a slider for volume.
 Edits persist through the same profile patch layer a hand edit would use.
 
-The controls need both halves. The schema is what the Host validates against and
-projects into a form; the row's `plugins.row.config` contribution is what draws
-it. A plugin with a schema but no contribution reports `status: "schema"` and
-still shows no controls anywhere.
+The controls need three things, and losing any one is silent in a different
+place. The schema is what the Host validates against. `.volatile()` on every
+field is what puts it in the settings document at all: the service projects only
+volatile fields, and drops an entry whose volatile projection is empty, so an
+ordinary field never reaches the UI. The row's `plugins.row.config` contribution
+is what draws it. A plugin can report `status: "schema"` and still show no
+controls anywhere.
+
+Edits take effect on the next alert rather than at the next restart: volatile
+fields resolve to accessors, so the plugin reads their current value each time it
+publishes instead of snapshotting at activation.
 
 The same fields can be set directly in a profile's `cordis.patch.yml`:
 
