@@ -1,6 +1,6 @@
 - insert:
     - id: sound-alerts
-      name: '@minti2/dsh-sound-alerts'
+      name: dsh-sound-alerts
       config:
         alerts:
           turnEnd: true

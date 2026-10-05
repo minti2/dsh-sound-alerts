@@ -1,7 +1,6 @@
 {
-  "name": "@minti2/dsh-sound-alerts",
-  "version": "0.2.0",
-  "private": true,
+  "name": "dsh-sound-alerts",
+  "version": "0.3.0",
   "type": "module",
   "description": "Play a chime in the browser when a turn finishes, when the harness needs your attention, or when a turn fails.",
   "license": "MIT",
@@ -18,6 +17,12 @@
     "locale/*.json",
     "icon.svg"
   ],
+  "peerDependencies": {
+    "@deepseek-ai/schemastery": "^3.18.2"
+  },
+  "devDependencies": {
+    "@deepseek-ai/schemastery": "^3.18.2"
+  },
   "dsh": {
     "bundle": {
       "patch": "./cordis.patch.yml"

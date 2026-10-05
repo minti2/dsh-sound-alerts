@@ -8,6 +8,28 @@ long run and still know the moment it needs you.
 A [Cordis](https://github.com/cordiverse/cordis) bundle with a Host half that
 detects alerts and a browser half that plays them.
 
+## Install
+
+```sh
+dsh plugin --profile <name> add github:minti2/dsh-sound-alerts
+```
+
+That is the whole install. `dsh plugin` forwards to pnpm and appends the bundle
+to the profile's `dsh.profile.bundles`, so nothing needs editing by hand.
+
+This package is plain JavaScript with **no build step**, which matters for a git
+install: git fetches sources rather than built artifacts, so a TypeScript plugin
+would need a `prepare` script plus a `pnpm-workspace.yaml` build allowlist that
+grants it permission to execute code on your machine at install time. There is
+no build here, so there is no allowlist and no install-time code execution.
+
+Installing into an agent's own profile uses the plugin manager instead:
+
+```
+plugin_manager  action: install_bundle
+                target: /path/to/dsh-sound-alerts
+```
+
 ## What triggers a sound
 
 | Alert | Harness event | When it plays |
@@ -38,7 +60,40 @@ Even `turnEnd` and `attention` share no partial structure: `attention` uses the
 inharmonic ratios that make a bell ring, while `error` detunes two voices against
 each other so the sound beats and reads as wrong.
 
-## Why the Host detects and the browser plays
+## Configuration
+
+`Config` is a Schemastery schema, so every field below appears as an editable
+control under the plugin's settings page — a switch per alert, a switch for
+subagent quiet, and a slider for volume. Edits persist through the same profile
+patch layer a hand edit would use.
+
+The same fields can be set directly in a profile's `cordis.patch.yml`:
+
+```yaml
+- id: sound-alerts
+  name: dsh-sound-alerts
+  config:
+    alerts:
+      turnEnd: true      # chime when a turn finishes
+      attention: true    # chime when the harness waits on you
+      error: true        # chime when a turn errors
+    quietSubagents: true # silence turnEnd and error from subagent sessions
+    volume: 0.25         # peak gain of every chime, 0..1
+```
+
+Notes:
+
+- **`volume` is the one knob for loudness.** It travels in each alert frame and
+  is applied in the browser, so tuning it does not require touching the chimes.
+- **`quietSubagents`** covers `turnEnd` and `error` only. Attention alerts
+  always play: a blocked request needs a human no matter which agent raised it.
+- **Changing config live reconnects your tab.** Applying new config disposes and
+  re-registers the alert route; the disposer ends the open streams, so the
+  browser reopens them instead of holding a dead one.
+- **Invalid values fail at activation** with the offending path named, so a typo
+  never silently disables an alert.
+
+### Why the Host detects and the browser plays
 
 Neither side can do both jobs.
 
@@ -59,66 +114,33 @@ sitting at, works when the Host runs remotely or in a container, and needs no
 The two halves are joined by a Server-Sent Events route, `/sound-alerts/events`,
 which the browser half subscribes to with `EventSource`.
 
-## Install
-
-```
-plugin_manager  action: install_bundle
-                target: /Users/<you>/Documents/dsh-plugins/dsh-sound-alerts
-```
-
-The bundle links the checkout into your profile, so edits take effect on the
-next Host restart.
-
-## Configuration
-
-Every field is optional; the defaults are shown in
-[`cordis.patch.yml`](cordis.patch.yml).
-
-```yaml
-- insert:
-    - id: sound-alerts
-      name: '@minti2/dsh-sound-alerts'
-      config:
-        alerts:
-          turnEnd: true      # chime when a turn finishes
-          attention: true    # chime when the harness waits on you
-          error: true        # chime when a turn errors
-        quietSubagents: true # silence turnEnd and error from subagent sessions
-        volume: 0.25         # peak gain of every chime, 0..1
-```
-
-Notes:
-
-- **`volume` is the one knob for loudness.** It travels in each alert frame and
-  is applied in the browser, so tuning it does not require touching the chimes.
-- **`quietSubagents`** covers `turnEnd` and `error` only. Attention alerts
-  always play: a blocked request needs a human no matter which agent raised it.
-- **Unknown keys and wrong types are rejected at load** with a message naming the
-  problem, so a typo never silently disables an alert.
-- **A live config change reconnects your tab.** Applying new config disposes and
-  re-registers the alert route; the disposer ends the open streams, so the
-  browser reopens them instead of holding a dead one.
-
 ## Verify
 
 ```sh
 node scripts/self-check.mjs
 ```
 
-Checks that defaults resolve, that misconfiguration is rejected at load, that the
-route and four listeners register, that the alert stream opens and rejects
-non-GET, that subagent turns stay quiet while attention still fires, that the two
-waterfall listeners delegate onward with `next()`, and that a disabled alert
-stays silent.
+Checks that defaults resolve and invalid values are rejected, that the Config is
+a native Schemastery graph (without which the settings controls silently
+disappear), that the route and four listeners register, that the alert stream
+opens and rejects non-GET, that subagent turns stay quiet while attention still
+fires, that both waterfall listeners delegate onward with `next()`, that
+disposal ends open streams, and that every published alert kind has a browser
+voice.
+
+It needs `@deepseek-ai/schemastery` resolvable beside the package; the Host
+supplies its own copy at runtime, and `devDependencies` supplies the one this
+check uses.
 
 ## Known limitations
 
 - **Web UI only.** The plugin requires the Host's web server, so it stays
   inactive in a headless profile. There is no terminal alert.
 - **The bass notes need speakers that reproduce them.** `error` bottoms out at
-  98 Hz and `turnEnd` at 247 Hz. Laptop speakers roll off below roughly 150 Hz, so
-  the lowest fundamentals are carried by their harmonics rather than reproduced
-  directly; raise the pitches if the low alerts sound thin.
+  98 Hz and `turnEnd` at 247 Hz. Laptop speakers roll off below roughly 150 Hz,
+  so the lowest fundamentals are carried by their harmonics rather than
+  reproduced directly; raise the pitches in `client.js` if the low alerts sound
+  thin.
 - **A user-cancelled turn still chimes.** `agent/turn-stopping` fires when a turn
   closes for any reason, including a cancel you initiated.
 - **The prepend depends on the application's forwarded-event listener not
@@ -141,8 +163,8 @@ profile's `dsh-hmr` config:
 - id: hmr
   config:
     root:
-      - /Users/<you>/Documents/dsh-plugins/dsh-sound-alerts
+      - /path/to/dsh-sound-alerts
 ```
 
 Run `node scripts/self-check.mjs` before reloading; it covers the listener
-wiring that a silent failure would otherwise hide.
+wiring and schema shape that a silent failure would otherwise hide.

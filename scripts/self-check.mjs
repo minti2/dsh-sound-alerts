@@ -2,24 +2,28 @@ import { strict as assert } from 'node:assert'
 import { readFileSync } from 'node:fs'
 import { Config, EVENTS_ENDPOINT, apply } from '../index.js'
 
-const validate = (input) => Config['~standard'].validate(input)
-
-// Defaults resolve to all three alerts at the default volume.
-const base = validate(undefined)
-assert.ok(base.value, `default config rejected: ${JSON.stringify(base.issues)}`)
-assert.deepEqual(base.value.alerts, { turnEnd: true, attention: true, error: true })
-assert.equal(base.value.quietSubagents, true)
-assert.equal(base.value.volume, 0.25)
+// The schema supplies every default, including for omitted nested fields.
+const base = Config({})
+assert.deepEqual(base.alerts, { turnEnd: true, attention: true, error: true })
+assert.equal(base.quietSubagents, true)
+assert.equal(base.volume, 0.25)
+assert.equal(Config({ volume: 0.5 }).volume, 0.5)
+assert.equal(Config({ alerts: { turnEnd: false } }).alerts.attention, true)
 console.log('ok  defaults resolve')
 
-// Misconfiguration must fail loud rather than at the first alert.
-assert.ok(validate({ nope: 1 }).issues.some((i) => i.message.includes('unknown config key')))
-assert.ok(validate({ alerts: { bogus: true } }).issues.some((i) => i.message.includes('unknown alert kind')))
-assert.ok(validate({ alerts: { turnEnd: 'yes' } }).issues.some((i) => i.message.includes('must be a boolean')))
-assert.ok(validate({ volume: 2 }).issues.some((i) => i.message.includes('between 0 and 1')))
-assert.ok(validate({ volume: 'loud' }).issues.some((i) => i.message.includes('between 0 and 1')))
-assert.ok(validate({ volume: 0.5 }).value)
+// Out-of-range and mistyped values fail at activation, not at the first alert.
+assert.throws(() => Config({ volume: 2 }), /volume/)
+assert.throws(() => Config({ volume: 'loud' }))
+assert.throws(() => Config({ alerts: { turnEnd: 'yes' } }))
 console.log('ok  invalid configs rejected')
+
+// The settings service projects a native Schemastery graph into an editable
+// form. A schema that only validates reports `unsupported` and gets no
+// controls, which is a silent loss of the settings UI.
+assert.equal(Reflect.get(Config, Symbol.for('schemastery')), true)
+assert.equal(typeof Config.type, 'string')
+assert.equal(typeof Config.meta, 'object')
+console.log('ok  config is a native schemastery graph, so settings renders controls')
 
 // Wire the plugin to a test context and capture its route and listeners.
 const listeners = new Map()
@@ -37,7 +41,7 @@ const ctx = {
   },
   webServer: { register: (registered) => { route = registered; return () => {} } },
 }
-apply(ctx, base.value)
+apply(ctx, base)
 
 assert.equal(route.path, EVENTS_ENDPOINT)
 assert.equal(route.kind, 'exact')
@@ -106,8 +110,8 @@ for (const event of ['approval/request', 'user-questions/request']) {
 assert.deepEqual(alerts(), ['turnEnd', 'attention', 'attention'])
 console.log('ok  waterfall listeners delegate via next() and still alert')
 
-// The frame carries the configured volume so tuning stays in cordis.yml.
-const tuned = validate({ volume: 0.05, alerts: { error: false } }).value
+// The frame carries the configured volume so tuning stays in the config.
+const tuned = Config({ volume: 0.05, alerts: { error: false } })
 const tunedFrames = []
 let tunedRoute
 apply(

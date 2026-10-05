@@ -17,8 +17,10 @@
  * The two halves are joined by a Server-Sent Events route; the browser half
  * renders each frame as a Web Audio chime.
  *
- * @module @minti2/dsh-sound-alerts
+ * @module dsh-sound-alerts
  */
+
+import Schema from '@deepseek-ai/schemastery'
 
 /** Plugin identity used by the Loader and in diagnostics. */
 export const name = 'sound-alerts'
@@ -33,86 +35,37 @@ export const inject = ['webServer']
 /** Route carrying alert frames to every connected browser. */
 export const EVENTS_ENDPOINT = '/sound-alerts/events'
 
-/** Alert kinds a config may enable or disable. */
-const ALERT_KINDS = ['turnEnd', 'attention', 'error']
-
-/** Top-level config keys this plugin accepts. */
-const CONFIG_KEYS = ['alerts', 'quietSubagents', 'volume']
-
 /**
- * Validate and normalize the row's `config` into the complete spec `apply`
- * consumes, so a misconfiguration fails at load rather than at the first alert.
+ * Validated deployment choices.
  *
- * @param value - Raw `config` from the Loader row, absent when the row omits it.
- * @returns `{ value: spec }` when the config is usable, otherwise `{ issues }`
- * describing every problem found.
+ * A native Schemastery graph rather than a hand-rolled schema: it validates the
+ * row at activation AND projects to JSON Schema, which is what lets the
+ * settings service generate an editable form for this entry. A schema that only
+ * validates reports `unsupported` and gets no controls.
  */
-function validateConfig(value) {
-  const issues = []
-  const raw = value === undefined || value === null ? {} : value
-  if (typeof raw !== 'object' || Array.isArray(raw)) {
-    return { issues: [{ message: 'sound-alerts: config must be a mapping' }] }
-  }
-  for (const key of Object.keys(raw)) {
-    if (!CONFIG_KEYS.includes(key)) {
-      issues.push({ message: `sound-alerts: unknown config key "${key}"` })
-    }
-  }
+export const Config = Schema.object({
+  alerts: Schema.object({
+    turnEnd: Schema.boolean().default(true)
+      .description('Chime when a turn finishes.'),
+    attention: Schema.boolean().default(true)
+      .description('Chime when the harness is blocked waiting on your approval or your answer.'),
+    error: Schema.boolean().default(true)
+      .description('Chime when a step or turn fails.'),
+  }).default({}).description('Which events produce a sound.'),
 
-  const alerts = { turnEnd: true, attention: true, error: true }
-  if (raw.alerts !== undefined) {
-    if (typeof raw.alerts !== 'object' || raw.alerts === null || Array.isArray(raw.alerts)) {
-      issues.push({ message: 'sound-alerts: "alerts" must map an alert kind to a boolean' })
-    } else {
-      for (const [kind, enabled] of Object.entries(raw.alerts)) {
-        if (!ALERT_KINDS.includes(kind)) {
-          issues.push({ message: `sound-alerts: unknown alert kind "${kind}" in "alerts"` })
-        } else if (typeof enabled !== 'boolean') {
-          issues.push({ message: `sound-alerts: "alerts.${kind}" must be a boolean` })
-        } else {
-          alerts[kind] = enabled
-        }
-      }
-    }
-  }
+  quietSubagents: Schema.boolean().default(true)
+    .description('Silence turn-end and error chimes raised by subagent sessions. Attention alerts always play.'),
 
-  let quietSubagents = true
-  if (raw.quietSubagents !== undefined) {
-    if (typeof raw.quietSubagents !== 'boolean') {
-      issues.push({ message: 'sound-alerts: "quietSubagents" must be a boolean' })
-    } else {
-      quietSubagents = raw.quietSubagents
-    }
-  }
-
-  let volume = 0.25
-  if (raw.volume !== undefined) {
-    if (typeof raw.volume !== 'number' || !Number.isFinite(raw.volume) || raw.volume < 0 || raw.volume > 1) {
-      issues.push({ message: 'sound-alerts: "volume" must be a number between 0 and 1' })
-    } else {
-      volume = raw.volume
-    }
-  }
-
-  if (issues.length > 0) return { issues }
-  return { value: { alerts, quietSubagents, volume } }
-}
-
-/** Loader-facing config schema; a plain Standard Schema keeps the bundle dependency-free. */
-export const Config = {
-  '~standard': {
-    version: 1,
-    vendor: 'sound-alerts',
-    validate: validateConfig,
-  },
-}
+  volume: Schema.number().min(0).max(1).step(0.05).default(0.25)
+    .description('Peak gain of every chime, from 0 to 1.'),
+})
 
 /**
  * Register the alert listeners and the browser alert stream.
  *
  * @param ctx - Plugin context owning the route, the listeners, and the
  * connections they publish to.
- * @param config - The validated spec returned by {@link Config}.
+ * @param config - The resolved config from {@link Config}.
  */
 export function apply(ctx, config) {
   const { alerts, quietSubagents, volume } = config
