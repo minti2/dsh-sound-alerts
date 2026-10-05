@@ -21,7 +21,7 @@
  */
 
 window.__ModuleLoader__.load({
-  id: '@minti2/dsh-sound-alerts',
+  id: 'dsh-sound-alerts',
   factory() {
     /** Document-relative form of the Host's alert route. */
     const ENDPOINT = 'sound-alerts/events'
