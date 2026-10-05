@@ -130,20 +130,21 @@ which the browser half subscribes to with `EventSource`.
 ## Verify
 
 ```sh
+pnpm install                 # supplies the dev dependency the check imports
 node scripts/self-check.mjs
 ```
 
 Checks that defaults resolve and invalid values are rejected, that the Config is
-a native Schemastery graph (without which the settings controls silently
-disappear), that the route and four listeners register, that the alert stream
-opens and rejects non-GET, that subagent turns stay quiet while attention still
-fires, that both waterfall listeners delegate onward with `next()`, that
-disposal ends open streams, and that every published alert kind has a browser
-voice.
+a native Schemastery graph and every field is volatile (losing either silently
+removes the settings controls), that the route and four listeners register, that
+the alert stream opens, rejects non-GET, and survives a stream that dies
+mid-write, that subagent turns stay quiet while attention still fires, that both
+waterfall listeners delegate onward with `next()`, that disposal ends open
+streams, and that every published alert kind has a browser voice.
 
-It needs `@deepseek-ai/schemastery` resolvable beside the package; the Host
-supplies its own copy at runtime, and `devDependencies` supplies the one this
-check uses.
+The check imports `@deepseek-ai/schemastery`, which the Host supplies at runtime
+through the profile resolution layer and `devDependencies` supplies for the
+check itself. Without the install step it fails to resolve the module.
 
 ## Known limitations
 
@@ -161,6 +162,18 @@ check uses.
   prepends it ahead of this plugin would silence the attention chime while
   leaving turn-end and error alerts working. The self-check asserts the prepend
   so that regression cannot land silently.
+- **The alert route is not authenticated.** `/sound-alerts/events` is served by
+  the Host's web server without a credential check, matching the shipped
+  `/plugins/events` route. It is a receive-only channel — nothing can be
+  injected through it, and it cannot be made to produce sound — but a client
+  that can reach the port can subscribe and learn *that an approval or question
+  is pending*. That is metadata, not content. It matters only if the Host is
+  bound beyond loopback; on the default loopback binding the reachable set is
+  the local machine, which can already read the profile's files.
+- **The settings card renders nothing for `view: 'summary'`.** The page falls
+  back to its own one-liner for this row. That is the intended reading of the
+  slot contract, but it is the one behaviour here verified only against the
+  running UI rather than asserted by the self-check.
 
 ## Development
 
