@@ -10,3 +10,5 @@
         # default. Attention alerts ignore this flag: a blocked request always
         # needs a human regardless of which agent raised it.
         quietSubagents: true
+        # Peak output gain of every chime in the browser, 0..1.
+        volume: 0.25

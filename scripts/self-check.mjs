@@ -1,50 +1,51 @@
 import { strict as assert } from 'node:assert'
-import { Config, apply } from '../index.js'
+import { Config, EVENTS_ENDPOINT, apply } from '../index.js'
 
 const validate = (input) => Config['~standard'].validate(input)
 
-// Defaults resolve to the three bundled chimes and the platform player.
+// Defaults resolve to all three alerts at the default volume.
 const base = validate(undefined)
 assert.ok(base.value, `default config rejected: ${JSON.stringify(base.issues)}`)
 assert.deepEqual(base.value.alerts, { turnEnd: true, attention: true, error: true })
 assert.equal(base.value.quietSubagents, true)
-assert.equal(base.value.player.command, '/usr/bin/afplay')
-for (const kind of ['turnEnd', 'attention', 'error']) {
-  assert.ok(base.value.sounds[kind].endsWith('.wav'), `${kind} did not resolve`)
-}
+assert.equal(base.value.volume, 0.25)
 console.log('ok  defaults resolve')
 
 // Misconfiguration must fail loud rather than at the first alert.
 assert.ok(validate({ nope: 1 }).issues.some((i) => i.message.includes('unknown config key')))
 assert.ok(validate({ alerts: { bogus: true } }).issues.some((i) => i.message.includes('unknown alert kind')))
 assert.ok(validate({ alerts: { turnEnd: 'yes' } }).issues.some((i) => i.message.includes('must be a boolean')))
-assert.ok(validate({ sounds: { turnEnd: './missing.wav' } }).issues.some((i) => i.message.includes('missing file')))
-assert.ok(validate({ sounds: { done: './missing.wav' } }).issues.some((i) => i.message.includes('unknown alert kind')))
-assert.ok(validate({ player: { args: ['-v', '0.5'] } }).issues.some((i) => i.message.includes('{file}')))
-assert.ok(validate({ player: { command: 'x', args: ['{file}'] } }).value)
+assert.ok(validate({ volume: 2 }).issues.some((i) => i.message.includes('between 0 and 1')))
+assert.ok(validate({ volume: 'loud' }).issues.some((i) => i.message.includes('between 0 and 1')))
+assert.ok(validate({ volume: 0.5 }).value)
 console.log('ok  invalid configs rejected')
 
-// Disabling an alert is honoured at dispatch time.
+// Wire the plugin to a test context and capture its route and listeners.
 const listeners = new Map()
 const listenerOptions = new Map()
-const warnings = []
-apply(
-  {
-    on: (name, fn, options) => {
-      listeners.set(name, fn)
-      listenerOptions.set(name, options)
-    },
-    logger: { warn: (m) => warnings.push(m) },
+let route
+const ctx = {
+  effect: (fn) => {
+    fn()
+    return () => {}
   },
-  { ...base.value, alerts: { turnEnd: false, attention: true, error: true } },
-)
+  on: (name, fn, options) => {
+    listeners.set(name, fn)
+    listenerOptions.set(name, options)
+  },
+  webServer: { register: (registered) => { route = registered; return () => {} } },
+}
+apply(ctx, base.value)
+
+assert.equal(route.path, EVENTS_ENDPOINT)
+assert.equal(route.kind, 'exact')
 assert.deepEqual([...listeners.keys()], [
   'agent/turn-stopping',
   'agent/error',
   'approval/request',
   'user-questions/request',
 ])
-console.log('ok  listeners registered')
+console.log('ok  route and listeners registered')
 
 // Regression: the application's forwarded-event listener answers these two
 // requests on behalf of the UI and resolves WITHOUT calling next(), so an
@@ -59,13 +60,37 @@ for (const event of ['approval/request', 'user-questions/request']) {
 assert.equal(listenerOptions.get('agent/turn-stopping'), undefined)
 console.log('ok  attention listeners prepend ahead of the answering listener')
 
+// Open one browser stream and record the frames the Host publishes to it.
+const frames = []
+const headers = []
+const response = {
+  writeHead: (status, sent) => { headers.push([status, sent]) },
+  write: (chunk) => { frames.push(chunk); return true },
+  on: () => {},
+  end: () => {},
+}
+route.handler({ method: 'GET' }, response)
+assert.equal(headers[0][0], 200)
+assert.equal(headers[0][1]['content-type'], 'text/event-stream')
+assert.deepEqual(frames, [': connected\n\n'])
+
+// A non-GET hit is rejected at the route, not upstream.
+const rejected = []
+route.handler({ method: 'POST' }, { writeHead: (s) => rejected.push(s), end: () => {} })
+assert.deepEqual(rejected, [405])
+console.log('ok  stream opens and rejects non-GET')
+
+const parse = (chunk) => JSON.parse(chunk.slice('data: '.length))
+const alerts = () => frames.slice(1).map((chunk) => parse(chunk).kind)
+
 // Root agents alert; subagent turns stay quiet under quietSubagents.
 listeners.get('agent/turn-stopping')({ agent: { session: { header: {} } } })
 listeners.get('agent/turn-stopping')({ agent: { session: { header: { origin: 'subagent' } } } })
-listeners.get('agent/turn-stopping')({ agent: { session: { header: { origin: 'subagent' } } } })
-console.log('ok  turn-stopping dispatch (one root chime expected)')
+listeners.get('agent/error')({ agent: { session: { header: { origin: 'subagent' } } } })
+assert.deepEqual(alerts(), ['turnEnd'])
+console.log('ok  turn-end alerts, subagent turns stay quiet')
 
-// Waterfall events must delegate onward, never short-circuit.
+// Attention ignores quietSubagents: a blocked subagent still needs a human.
 for (const event of ['approval/request', 'user-questions/request']) {
   let delegated = false
   const outcome = await listeners.get(event)({}, () => {
@@ -75,8 +100,23 @@ for (const event of ['approval/request', 'user-questions/request']) {
   assert.equal(delegated, true, `${event} did not call next()`)
   assert.equal(outcome, 'outcome', `${event} did not forward the outcome`)
 }
-console.log('ok  waterfall listeners delegate via next()')
+assert.deepEqual(alerts(), ['turnEnd', 'attention', 'attention'])
+console.log('ok  waterfall listeners delegate via next() and still alert')
 
-await new Promise((resolve) => setTimeout(resolve, 1500))
-assert.deepEqual(warnings, [], `unexpected playback warnings: ${warnings.join('; ')}`)
-console.log('ok  no playback failures')
+// The frame carries the configured volume so tuning stays in cordis.yml.
+const tuned = validate({ volume: 0.05, alerts: { error: false } }).value
+const tunedFrames = []
+let tunedRoute
+apply(
+  {
+    effect: (fn) => { fn(); return () => {} },
+    on: (name, fn) => listeners.set(name, fn),
+    webServer: { register: (registered) => { tunedRoute = registered; return () => {} } },
+  },
+  tuned,
+)
+tunedRoute.handler({ method: 'GET' }, { writeHead: () => {}, write: (c) => { tunedFrames.push(c); return true }, on: () => {} })
+listeners.get('agent/error')({ agent: { session: { header: {} } } })
+listeners.get('agent/turn-stopping')({ agent: { session: { header: {} } } })
+assert.deepEqual(tunedFrames.slice(1).map(parse), [{ kind: 'turnEnd', volume: 0.05 }])
+console.log('ok  disabled alerts stay silent and frames carry the configured volume')

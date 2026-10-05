@@ -1,29 +1,30 @@
 {
   "name": "@minti2/dsh-sound-alerts",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
-  "description": "Play a chime when a turn finishes, when the harness needs your attention, or when a turn fails.",
+  "description": "Play a chime in the browser when a turn finishes, when the harness needs your attention, or when a turn fails.",
   "license": "MIT",
   "exports": {
     ".": "./index.js",
+    "./client": "./client.js",
     "./locale/*.json": "./locale/*.json",
     "./icon": "./icon.svg"
   },
   "files": [
     "index.js",
+    "client.js",
     "cordis.patch.yml",
     "locale/*.json",
-    "icon.svg",
-    "sounds/*.wav",
-    "scripts"
+    "icon.svg"
   ],
-  "scripts": {
-    "generate-sounds": "node scripts/generate-sounds.mjs"
-  },
   "dsh": {
     "bundle": {
       "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "immediately": true
     }
   }
 }
