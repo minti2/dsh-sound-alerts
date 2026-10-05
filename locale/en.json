@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Sound Alerts",
+    "description": "Play a chime when a turn finishes, when the harness is waiting on your approval or answer, or when a turn fails."
+  }
+}

@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Sound alerts">
+  <rect width="64" height="64" rx="14" fill="#1b1f2a"/>
+  <path d="M32 12c-6.1 0-11 4.9-11 11v8.6l-3.4 5.6c-.7 1.2.1 2.8 1.5 2.8h25.8c1.4 0 2.2-1.6 1.5-2.8L43 31.6V23c0-6.1-4.9-11-11-11Z" fill="#f2c14e"/>
+  <path d="M27 41a5 5 0 0 0 10 0Z" fill="#f2c14e"/>
+  <path d="M50 20a13 13 0 0 1 0 18" fill="none" stroke="#6cc7d6" stroke-width="3.2" stroke-linecap="round"/>
+  <path d="M14 20a13 13 0 0 0 0 18" fill="none" stroke="#6cc7d6" stroke-width="3.2" stroke-linecap="round"/>
+</svg>

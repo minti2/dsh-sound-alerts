@@ -1,0 +1,12 @@
+- insert:
+    - id: sound-alerts
+      name: '@minti2/dsh-sound-alerts'
+      config:
+        alerts:
+          turnEnd: true
+          attention: true
+          error: true
+        # Subagent turns are noisy on fan-out runs, so they stay silent by
+        # default. Attention alerts ignore this flag: a blocked request always
+        # needs a human regardless of which agent raised it.
+        quietSubagents: true
