@@ -129,3 +129,24 @@ listener.
   prepending itself.** Both still run if it does, but a future change that
   prepends it ahead of this plugin would silence the attention chime while
   leaving turn-end and error alerts working.
+
+## Development
+
+**Editing `index.js` requires a Harness restart.** A profile enables `dsh-hmr`
+for configuration, but its `root` defaults to `[]`, so module roots — the
+JavaScript itself — are not watched. Saving `index.js` alone changes nothing in
+a running Host; only `cordis.patch.yml` changes apply live.
+
+To iterate without restarting, add this package to the module watch roots in the
+profile's `dsh-hmr` config:
+
+```yaml
+- id: hmr
+  config:
+    root:
+      - /Users/<you>/Documents/dsh-plugins/sound-alerts
+```
+
+Then run `node scripts/self-check.mjs` before reloading, since that check covers
+the listener wiring that a silent failure would otherwise hide.
+
